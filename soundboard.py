@@ -11,6 +11,7 @@ import math
 import time
 import keyboard
 import threading
+import subprocess
 
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtWidgets import QApplication, QMenuBar, QMainWindow, QAction, QGridLayout, QWidget, QPushButton, QFileDialog, QLabel, QMenu, QInputDialog
@@ -54,6 +55,8 @@ class SoundWidget(QWidget):
         grid_layout.addWidget(label, *title_position)
         grid_layout.addWidget(play_button, *button_pos)
         self.setLayout(grid_layout)
+        if self.sound['shortcut']:
+            keyboard.add_hotkey(self.sound['shortcut'], self._play_sound())
 
     def _play_sound(self):
         def start_audio():
@@ -73,7 +76,6 @@ class SoundWidget(QWidget):
 
         data = sound_file.readframes(1024)
 
-
         self.playing = True
 
         while data and self.playing:
@@ -91,14 +93,6 @@ class SoundWidget(QWidget):
 
     def set_channel(self, channel):
         self.channel = channel
-
-    # def minimumSizeHint(self):
-    #     height = (self.findChild(QPushButton, 'playbutton').minimumSizeHint().height() +
-    #                  self.findChild(QLabel, 'title').minimumSizeHint().height() + 20)
-
-    #     width = (self.findChild(QPushButton, 'playbutton').minimumSizeHint().width()
-    #                  + self.findChild(QLabel, 'title').minimumSizeHint().width() + 20)
-    #     return QSize(width, height)
 
 
 class SoundboardGrid(QWidget):
@@ -191,7 +185,8 @@ class Soundboard(QMainWindow):
             select_device.setCheckable(True)
             if self.config['out_device'] == OUTPUT_DEVICES[device]:
                 select_device.setChecked(True)
-            select_device.triggered.connect(self._set_output_device(select_device))
+            select_device.triggered.connect(
+                self._set_output_device(select_device))
             output_menu.addAction(select_device)
 
         self.setMenuBar(menu_bar)
@@ -200,14 +195,31 @@ class Soundboard(QMainWindow):
     def _add_sound(self):
         sound_file = QFileDialog.getOpenFileName()
         if sound_file[0] != '':
-            title = QInputDialog.getText(self, 'Sound Name', 'Enter the name of the sound:')
+            title = QInputDialog.getText(
+                self, 'Sound Name', 'Enter the name of the sound:')
             if sound_file[0].endswith('.wav'):
                 if os.path.abspath(os.path.join('sounds', os.path.basename(sound_file[0]))) != os.path.abspath(sound_file[0]):
-                    with open(os.path.join('sounds', os.path.basename(sound_file[0])), 'w') as output_file:
-                        with open(os.path.abspath(sound_file[0]), 'r') as input_file:
+                    with open(os.path.join('sounds', os.path.basename(sound_file[0])), 'wb') as output_file:
+                        with open(os.path.abspath(sound_file[0]), 'rb') as input_file:
                             output_file.writelines(input_file.readlines())
-
-                sound = Sound(title[0], '.'.join(os.path.basename(sound_file[0]).split('.')[0:-1]))
+                sound = Sound(title[0], '.'.join(
+                    os.path.basename(sound_file[0]).split('.')[0:-1]))
+                self.grid.add_sound(sound.__dict__)
+                self.config['sounds'].append(sound.__dict__)
+                self._save_config()
+            elif sound_file[0].endswith('.mp3'):
+                with open(os.path.join('sounds', os.path.basename(sound_file[0])), 'wb') as output_file:
+                    with open(os.path.abspath(sound_file[0]), 'rb') as input_file:
+                        output_file.writelines(input_file.readlines())
+                args = ['ffmpeg', '-i', os.path.join('sounds', os.path.basename(sound_file[0])),
+                        '-acodec', 'pcm_u8', '-ar', '22050', os.path.join('sounds', '.'.join(os.path.basename(sound_file[0]).split('.')[0:-1]) + '.wav')]
+                process = subprocess.Popen(
+                    args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                process.wait()
+                os.remove(os.path.join(
+                    'sounds', os.path.basename(sound_file[0])))
+                sound = Sound(title[0], '.'.join(
+                    os.path.basename(sound_file[0]).split('.')[0:-1]))
                 self.grid.add_sound(sound.__dict__)
                 self.config['sounds'].append(sound.__dict__)
                 self._save_config()
