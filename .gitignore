@@ -1,0 +1,9 @@
+# Folders
+
+.env/
+.vscode/
+sounds/
+
+# Files
+
+sound_map.json
